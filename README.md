@@ -73,6 +73,23 @@
 * processor : 처리 메소드
 * writer : 쓰기 메소드 처리
 
+```java
+// pseudocode
+class JobLauncherClass {
+
+    private final JobLauncher jobLauncher;
+    private final JobRegistry jobRegistry;
+
+    JobParameters jobParameters = new JobParametersBuilder().addString("date", value).toJobParameters();
+
+    jobLauncher.run(jobRegistry.getJob("firstJob"),jobParameters);
+}
+```
+
+* JobLauncher : Job 실행 시점
+* JobRegistry : 특정 배치(JOB)를 가져오는 registry
+* JobParameter : 실행할 job에게 특정날짜(보통 그렇다) or 특정번호 같은것을 가지고 실행할 수 있게 하는 것. 작업 통제
+
 
 
 
