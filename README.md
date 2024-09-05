@@ -40,7 +40,7 @@
 
 <img width="726" alt="Screenshot 2024-09-03 at 23 37 52" src="https://github.com/user-attachments/assets/0d39688f-3cf5-4af0-821e-593f6e475075">
 
-* JobLauncer : 하나의 배치 작업을 실행시키는 시작점
+* JobLauncher : 하나의 배치 작업을 실행시키는 시작점
 * Job : 읽기 -> 처리 -> 쓰기 과정을 정의한 배치 작업
 * Step : 실제 하나의 읽기 -> 처리 -> 쓰기 작업을 정의한 부분으로, 1개의 Job에서 여러 과정을 진행할 수 있기 때문에 1:N의 구조를 가진다.
 * ItemReader : 읽어오는 부분
@@ -62,7 +62,16 @@
 
 배치에서 중요한 작업에 대한 트래킹을 수행하는 테이블로, 스프링 배치에서도 메타데이터를 관리해야 합니다.
 
+## 구현
 
+* JobRepository : 배치의 작업 기록 tracking
+
+### Step
+
+* chunk : 데이터 읽는 단위
+* reader : 읽는 메소드 처리
+* processor : 처리 메소드
+* writer : 쓰기 메소드 처리
 
 
 
