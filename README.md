@@ -90,6 +90,76 @@ class JobLauncherClass {
 * JobRegistry : 특정 배치(JOB)를 가져오는 registry
 * JobParameter : 실행할 job에게 특정날짜(보통 그렇다) or 특정번호 같은것을 가지고 실행할 수 있게 하는 것. 작업 통제
 
+## 영속성별 구현
 
+### JDBC
 
+https://github.com/spring-projects/spring-batch/tree/main/spring-batch-samples/src/main/java/org/springframework/batch/samples/jdbc
 
+### MongoDB
+
+https://github.com/spring-projects/spring-batch/tree/main/spring-batch-samples/src/main/java/org/springframework/batch/samples/mongodb
+
+## ItemStreamReader
+
+배체에서 데이터를 읽는 Reader
+
+스프링 배치에서 가장 중요한 부분은 Reader 부분이다.
+
+현재까지 실행한 부분을 메타데이터에 저장해야하고 처리한 부분은 스킵해야 되기 때문이다.
+
+그래서 스프링에서 다양한 Reader 구현제를 제공하는데 가끔 없다.
+
+없는 경우 커스텀 reader를 만들어야 한다.
+
+ItemStreamReader = ItemStream + ItemReader
+
+### ItemStream
+
+```java
+public interface ItemStream {
+
+    default void open(ExecutionContext executionContext) throws ItemStreamException {
+    }
+
+    default void update(ExecutionContext executionContext) throws ItemStreamException {
+    }
+
+    default void close() throws ItemStreamException {
+    }
+
+}
+```
+
+* open : 배치가 시작되었을때, step에서 처음 reader를 부르면 시작되며, 초기화나 이미 했던 작업의 경우 중단점까지 건너 뛰도록 설계하는 부분
+
+* update : 반복 실행 되는 만큼 실행. reader의 read()에서 실행한 단위를 기록하는 용도.
+
+* close : 배치가 끝나고 파일을 저장하거나 필드 변수 초기화등. 단 한번만 실행.
+
+### ItemReader
+
+데이터 읽기를 위한 read() 메소드
+
+```java
+
+@FunctionalInterface
+public interface ItemReader<T> {
+
+    @Nullable
+    T read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException;
+
+}
+```
+
+### ExecutionContext
+
+ItemStream의 Open(), update()에 매개변수로 주입되어 있는 객체로 배치 작업 처리시 기준점을 잡을 변수를 계속하여 트래킹하기 위한 저장소로 사용된다.
+
+해당 클래스에서 put으로 값을 넣고 get으로 넣은 값을 가져온다.
+
+ExecutionContext 데이터는 JdbcExecutionContextDao에 의해 메타데이터 테이블에 저장되며 범위에 따라 아래와 같이 나뉩니다.
+
+* BATCH_JOB_Execution_Context
+
+* BATCH_STEP_Execution_Context
