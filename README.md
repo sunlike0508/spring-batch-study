@@ -163,3 +163,226 @@ ExecutionContext 데이터는 JdbcExecutionContextDao에 의해 메타데이터 
 * BATCH_JOB_Execution_Context
 
 * BATCH_STEP_Execution_Context
+
+## Step
+
+Step은 배치 작업을 처리하는 하나의 묶음이다. 두 가지 방식이 있다.
+
+1) Chunk
+
+* 현재 우리가 공부한거
+
+2) Tasklet
+
+* 단 한번만 실행
+* 간단히 처리하는 것들만 사용
+
+### skip
+
+step 과정 중 예외가 발생하면 특정 수까지 건너 뛸 수 있도록 설정하는 방법
+
+```java
+
+@Bean
+public Step sixthStep() {
+
+    return new StepBuilder("sixthStep", jobRepository).<BeforeEntity, AfterEntity>chunk(10, platformTransactionManager)
+            .reader(beforeSixthReader()).processor(middleSixthProcessor()).writer(afterSixthWriter()).faultTolerant()
+            .skip(Exception.class).noSkip(FileNotFoundException.class).noSkip(IOException.class).skipLimit(10).build();
+}
+```
+
+아래는 커스텀
+
+```java
+
+@Bean
+public Step sixthStep() {
+
+    return new StepBuilder("sixthStep", jobRepository).<BeforeEntity, AfterEntity>chunk(10, platformTransactionManager)
+            .reader(beforeSixthReader()).processor(middleSixthProcessor()).writer(afterSixthWriter()).faultTolerant()
+            .skipPolicy(customSkipPolicy).noSkip(FileNotFoundException.class).noSkip(IOException.class).build();
+}
+
+
+@Configuration
+public class CustomSkipPolicy implements SkipPolicy {
+
+    @Override
+    public boolean shouldSkip(Throwable t, long skipCount) throws SkipLimitExceededException {
+        return true;
+    }
+}
+```
+
+### Retry
+
+Step 과정 중 예외가 발생하면 특정수까지 반복할 수 있도록 설정하는 방법
+
+```java
+
+@Bean
+public Step sixthStep() {
+
+    return new StepBuilder("sixthStep", jobRepository).<BeforeEntity, AfterEntity>chunk(10, platformTransactionManager)
+            .reader(beforeSixthReader()).processor(middleSixthProcessor()).writer(afterSixthWriter()).faultTolerant()
+            .retryLimit(3).retry(SQLException.class).retry(IOException.class).noRetry(FileNotFoundException.class)
+            .build();
+}
+```
+
+SQLException, IOException 예외가 터지면 3까지는 반복
+
+### Writer 롤백 제어
+
+Writer 특정 예외에 트랜잭션 롤백 제외하는 방법
+
+```java
+
+@Bean
+public Step step1(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+    return new StepBuilder("step1", jobRepository).<String, String>chunk(2, transactionManager).reader(itemReader())
+            .writer(itemWriter()).faultTolerant().noRollback(ValidationException.class).build();
+}
+```
+
+### Step Listener
+
+Step의 실행 전후에 특정 작업을 수행할 수 있게 설정하는 압법
+
+로그를 남기거나 다음 step 준비가 되었는지 체크(다음 step이 의존되는 경우 변수 정리 등)
+
+```java
+
+@Bean
+public StepExecutionListener stepExecutionListener() {
+
+    return new StepExecutionListener() {
+
+        @Override
+        public void beforeStep(StepExecution stepExecution) {
+            StepExecutionListener.super.beforeStep(stepExecution);
+        }
+
+
+        @Override
+        public ExitStatus afterStep(StepExecution stepExecution) {
+            return StepExecutionListener.super.afterStep(stepExecution);
+        }
+    };
+}
+
+
+@Bean
+public Step sixthStep() {
+
+    return new StepBuilder("sixthStep", jobRepository).<BeforeEntity, AfterEntity>chunk(10, platformTransactionManager)
+            .reader(beforeSixthReader()).processor(middleSixthProcessor()).writer(afterSixthWriter())
+            .listener(stepExecutionListener()).build();
+}
+```
+
+## Job
+
+### Step flow
+
+* 순차적으로 실행
+
+가장 먼저 실행될 step만 start에 주입하고 다음부터 next로 이어준다. 이전 step이 실패할 경우 뒤에 step은 실행하지 않는다.
+
+```java
+
+@Bean
+public Job footballJob(JobRepository jobRepository) {
+    return new JobBuilder("footballJob", jobRepository).start(playerLoad()).next(gameLoad()).next(playerSummarization())
+            .build();
+}
+```
+
+* 조건에 따라 실행
+
+```java
+
+@Bean
+public Job job(JobRepository jobRepository, Step stepA, Step stepB, Step stepC, Step stepD) {
+    return new JobBuilder("job", jobRepository).start(stepA).on("*").to(stepB).from(stepA).on("FAILED").to(stepC)
+            .from(stepA).on("COMPLETED").to(stepD).end().build();
+}
+```
+
+on("*").to(stepB) 와일드카드가 오면 실패든 성공이든 무조건 stepB 실행
+
+실패하면 stepC, 성공하면 stepD
+
+https://docs.spring.io/spring-batch/reference/step/controlling-flow.html
+
+### Job listener
+
+step 리스너랑 같은 역할. job 실행 전후에 실행
+
+```java
+
+@Bean
+public JobExecutionListener jobExecutionListener() {
+
+    return new JobExecutionListener() {
+
+        @Override
+        public void beforeJob(JobExecution jobExecution) {
+            JobExecutionListener.super.beforeJob(jobExecution);
+        }
+
+
+        @Override
+        public void afterJob(JobExecution jobExecution) {
+            JobExecutionListener.super.afterJob(jobExecution);
+        }
+    };
+}
+
+
+@Bean
+public Job sixthBatch() {
+
+    return new JobBuilder("sixthBatch", jobRepository).start(sixthStep()).listener(jobExecutionListener()).build();
+}
+```
+
+### JPA 성능 문제와 JDBC
+
+스프링 배치 read, writer 부분을 JPA로 구성할 경우 JDBC 대비 처리 속도가 엄청나게 차이 난다.
+
+Reader의 경우 영향이 크게 없으나 writer의 경우 엄청난 영향이 있다.
+
+#### bulk 쿼리 실패
+
+jdbc 기반으로 작성하게 된다면 청크로 설정한 값이 모여 bulk 쿼리로 단 1번의 insert가 수행된다.
+
+그러나 JPA는 Identity 전략때문에 bulk 쿼리 대신 각각의 수만큼 insert 된다.
+
+* JPA Identity 전략
+    * Entity의 id 생성 전략은 보통 Identity로 설정하게 된다. 이 설정은 save() 수행시 DB 테이블을 조회하여 가장 마지막 값보다 1을 증가 시킨 값을 저장하게 된다.
+
+여기서 batch 청크 단위 bulk insert 수행이 무너진다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

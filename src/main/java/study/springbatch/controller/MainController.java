@@ -1,6 +1,7 @@
 package study.springbatch.controller;
 
 
+import java.time.LocalDateTime;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.JobParametersInvalidException;
@@ -38,7 +39,8 @@ public class MainController {
             throws NoSuchJobException, JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException,
             JobParametersInvalidException, JobRestartException {
 
-        JobParameters jobParameters = new JobParametersBuilder().addString("date", value).toJobParameters();
+        JobParameters jobParameters =
+                new JobParametersBuilder().addString("date", LocalDateTime.now().toString()).toJobParameters();
 
         jobLauncher.run(jobRegistry.getJob("firstJob"), jobParameters);
 
@@ -51,7 +53,8 @@ public class MainController {
             throws NoSuchJobException, JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException,
             JobParametersInvalidException, JobRestartException {
 
-        JobParameters jobParameters = new JobParametersBuilder().addString("date", value).toJobParameters();
+        JobParameters jobParameters =
+                new JobParametersBuilder().addString("date", LocalDateTime.now().toString()).toJobParameters();
 
         jobLauncher.run(jobRegistry.getJob("secondJob"), jobParameters);
 
